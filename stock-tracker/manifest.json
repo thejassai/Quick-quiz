@@ -2,7 +2,7 @@
   "name": "Stock Tracker",
   "short_name": "StockTracker",
   "description": "Track stocks, monitor P&L, and set price alerts.",
-  "start_url": "/stock-tracker/index.html",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#0f1117",
   "theme_color": "#00c853",
