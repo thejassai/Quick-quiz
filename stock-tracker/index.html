@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stock Tracker</title>
+
+  <!-- Bootstrap 5 for layout and components -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" />
+  <!-- Our custom styles -->
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- PWA: link to the app manifest -->
+  <link rel="manifest" href="manifest.json" />
+  <!-- Theme color for mobile browser chrome -->
+  <meta name="theme-color" content="#00c853" />
+  <!-- iOS-specific PWA meta tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="StockTracker" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+</head>
+<body>
+
+  <!-- ── Top Navigation Bar ─────────────────────────────────────── -->
+  <nav class="navbar navbar-dark bg-dark px-4">
+    <span class="navbar-brand fw-bold fs-4">
+      <i class="bi bi-graph-up-arrow text-success me-2"></i>Stock Tracker
+    </span>
+    <span id="last-updated" class="text-secondary small"></span>
+  </nav>
+
+  <div class="container-fluid px-4 py-4">
+
+    <!-- ── API Key Warning Banner (shown until key is set) ───────── -->
+    <div id="api-warning" class="alert alert-warning d-flex align-items-center mb-4">
+      <i class="bi bi-exclamation-triangle-fill me-2"></i>
+      <div>
+        <strong>Set your API key first!</strong>
+        Open <code>app.js</code> and replace <code>YOUR_API_KEY_HERE</code> with your free key from
+        <a href="https://www.alphavantage.co/support/#api-key" target="_blank">alphavantage.co</a>
+        (takes 30 seconds, it's free).
+      </div>
+    </div>
+
+    <!-- ── Search & Add Stock ─────────────────────────────────────── -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-body">
+        <h5 class="card-title mb-3"><i class="bi bi-search me-2"></i>Search & Add Stock</h5>
+        <div class="row g-2">
+          <div class="col-md-3">
+            <input id="search-input" type="text" class="form-control" placeholder="Ticker symbol (e.g. AAPL)" />
+          </div>
+          <div class="col-md-2">
+            <input id="buy-price" type="number" class="form-control" placeholder="Your buy price ($)" min="0" step="0.01" />
+          </div>
+          <div class="col-md-2">
+            <input id="buy-qty" type="number" class="form-control" placeholder="Quantity (shares)" min="1" />
+          </div>
+          <div class="col-md-2">
+            <button id="add-btn" class="btn btn-success w-100" onclick="addStock()">
+              <i class="bi bi-plus-lg me-1"></i>Add to Portfolio
+            </button>
+          </div>
+          <div class="col-md-3">
+            <button class="btn btn-outline-secondary w-100" onclick="refreshAll()">
+              <i class="bi bi-arrow-clockwise me-1"></i>Refresh Prices
+            </button>
+          </div>
+        </div>
+        <div id="search-error" class="text-danger small mt-2 d-none"></div>
+      </div>
+    </div>
+
+    <!-- ── Portfolio Summary Cards ───────────────────────────────── -->
+    <div class="row g-3 mb-4" id="summary-section">
+      <div class="col-md-4">
+        <div class="card text-center shadow-sm">
+          <div class="card-body">
+            <div class="text-muted small">Total Invested</div>
+            <div id="total-invested" class="fs-3 fw-bold">$0.00</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card text-center shadow-sm">
+          <div class="card-body">
+            <div class="text-muted small">Current Value</div>
+            <div id="current-value" class="fs-3 fw-bold">$0.00</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card text-center shadow-sm">
+          <div class="card-body">
+            <div class="text-muted small">Total Profit / Loss</div>
+            <div id="total-pnl" class="fs-3 fw-bold">$0.00</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Holdings Table ─────────────────────────────────────────── -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-body">
+        <h5 class="card-title mb-3"><i class="bi bi-briefcase me-2"></i>My Portfolio</h5>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-dark">
+              <tr>
+                <th>Symbol</th>
+                <th>Shares</th>
+                <th>Buy Price</th>
+                <th>Current Price</th>
+                <th>Change Today</th>
+                <th>P&amp;L</th>
+                <th>P&amp;L %</th>
+                <th>Chart</th>
+                <th>Remove</th>
+              </tr>
+            </thead>
+            <tbody id="portfolio-body">
+              <!-- Rows inserted by JavaScript -->
+            </tbody>
+          </table>
+        </div>
+        <div id="empty-msg" class="text-center text-muted py-4">
+          No stocks yet — search for a ticker above to get started!
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Price Alerts ───────────────────────────────────────────── -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-body">
+        <h5 class="card-title mb-3"><i class="bi bi-bell me-2"></i>Price Alerts</h5>
+        <p class="text-muted small">Get notified when a stock hits your target price. Alerts are checked automatically every 60 seconds.</p>
+        <div class="row g-2 mb-3">
+          <div class="col-md-3">
+            <input id="alert-symbol" type="text" class="form-control" placeholder="Ticker (e.g. TSLA)" />
+          </div>
+          <div class="col-md-2">
+            <select id="alert-direction" class="form-select">
+              <option value="above">Price goes ABOVE</option>
+              <option value="below">Price goes BELOW</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <input id="alert-price" type="number" class="form-control" placeholder="Target price ($)" min="0" step="0.01" />
+          </div>
+          <div class="col-md-2">
+            <button class="btn btn-warning w-100" onclick="addAlert()">
+              <i class="bi bi-bell-fill me-1"></i>Set Alert
+            </button>
+          </div>
+          <div class="col-md-3">
+            <button class="btn btn-outline-secondary w-100" onclick="requestNotificationPermission()">
+              <i class="bi bi-bell-slash me-1"></i>Enable Browser Notifications
+            </button>
+          </div>
+        </div>
+
+        <!-- Active alerts list -->
+        <div id="alerts-list">
+          <!-- Alert badges inserted by JavaScript -->
+        </div>
+        <div id="alerts-empty" class="text-muted small">No active alerts.</div>
+      </div>
+    </div>
+
+  </div><!-- /container -->
+
+  <!-- ── Chart Modal ────────────────────────────────────────────── -->
+  <div class="modal fade" id="chartModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content bg-dark text-white">
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title" id="chart-modal-title">Price Chart</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <canvas id="priceChart" height="100"></canvas>
+          <div id="chart-loading" class="text-center py-4 text-muted">Loading chart data...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Toast Notification (for alerts) ──────────────────────── -->
+  <div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="alertToast" class="toast" role="alert">
+      <div class="toast-header bg-warning">
+        <i class="bi bi-bell-fill me-2"></i>
+        <strong class="me-auto">Price Alert!</strong>
+        <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+      </div>
+      <div class="toast-body" id="toast-body">Alert triggered.</div>
+    </div>
+  </div>
+
+  <!-- ── Scripts ───────────────────────────────────────────────── -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+
+  <!-- Register the Service Worker (makes the app installable + offline-capable) -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw.js")
+        .then(() => console.log("Service Worker registered — app is now a PWA!"))
+        .catch(err => console.warn("SW registration failed:", err));
+    }
+  </script>
+
+</body>
+</html>
