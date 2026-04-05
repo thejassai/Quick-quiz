@@ -7,7 +7,7 @@
 //  3. Open index.html in your browser — done!
 // ============================================================
 
-const API_KEY = "YOUR_API_KEY_HERE";   // <-- PASTE YOUR KEY HERE
+const API_KEY = "E7U4GCFI3MA1M42B";   // <-- PASTE YOUR KEY HERE
 const BASE_URL = "https://www.alphavantage.co/query";
 
 // ── State ────────────────────────────────────────────────────
