@@ -18,15 +18,50 @@ let portfolio = loadFromStorage("portfolio") || [];  // your holdings
 let alerts    = loadFromStorage("alerts")    || [];  // your price alerts
 
 // ── On page load ─────────────────────────────────────────────
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", async () => {
   checkApiKey();
   renderPortfolio();
   renderAlerts();
+
+  // Auto-add PNG.TRT on very first load (if portfolio is empty)
+  if (portfolio.length === 0) {
+    await autoAddStock("PNG.TRT", 100);  // $100 CAD investment
+  }
+
   // Refresh prices automatically every 60 seconds
   setInterval(refreshAll, 60_000);
   // Check alerts every 60 seconds
   setInterval(checkAlerts, 60_000);
 });
+
+// ── Auto-add a stock by investing a fixed dollar amount ──────
+// Fetches the current price, calculates how many whole shares
+// $totalCAD buys, then adds it to the portfolio.
+async function autoAddStock(symbol, totalCAD) {
+  try {
+    const quote = await fetchQuote(symbol);
+    const qty   = Math.floor(totalCAD / quote.price);  // whole shares only
+
+    if (qty < 1) {
+      console.warn(`$${totalCAD} CAD isn't enough to buy 1 share of ${symbol} at $${quote.price}`);
+      return;
+    }
+
+    portfolio.push({
+      symbol:        quote.symbol,
+      buyPrice:      quote.price,   // bought at today's price
+      qty:           qty,
+      currentPrice:  quote.price,
+      change:        quote.change,
+      changePercent: quote.changePercent,
+    });
+
+    saveToStorage("portfolio", portfolio);
+    renderPortfolio();
+  } catch (err) {
+    console.warn("Auto-add failed:", err.message);
+  }
+}
 
 // ── API Key check ────────────────────────────────────────────
 function checkApiKey() {
