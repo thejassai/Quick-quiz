@@ -29,7 +29,8 @@
     <span class="navbar-brand fw-bold fs-4">
       <i class="bi bi-graph-up-arrow text-success me-2"></i>Stock Tracker
     </span>
-    <span id="last-updated" class="text-secondary small"></span>
+    <span id="last-updated" class="text-secondary small me-3"></span>
+    <span id="auto-refresh-status" class="text-secondary small"></span>
   </nav>
 
   <div class="container-fluid px-4 py-4">
@@ -65,7 +66,7 @@
             </button>
           </div>
           <div class="col-md-3">
-            <button class="btn btn-outline-secondary w-100" onclick="refreshAll()">
+            <button id="manual-refresh-btn" class="btn btn-outline-secondary w-100" onclick="refreshAll()">
               <i class="bi bi-arrow-clockwise me-1"></i>Refresh Prices
             </button>
           </div>

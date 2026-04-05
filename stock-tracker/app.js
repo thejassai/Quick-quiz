@@ -22,16 +22,20 @@ window.addEventListener("DOMContentLoaded", async () => {
   checkApiKey();
   renderPortfolio();
   renderAlerts();
+  renderCallBudget();
 
   // Auto-add PNG.TRT on very first load (if portfolio is empty)
   if (portfolio.length === 0) {
     await autoAddStock("PNG.TRT", 100);  // $100 CAD investment
   }
 
-  // Refresh prices automatically every 60 seconds
-  setInterval(refreshAll, 60_000);
-  // Check alerts every 60 seconds
-  setInterval(checkAlerts, 60_000);
+  // Auto-refresh 15 times a day = every 96 minutes
+  // (24 hours × 60 min / 15 = 96 min)
+  const AUTO_INTERVAL_MS = 96 * 60 * 1000;   // 5,760,000 ms
+  setInterval(autoRefresh, AUTO_INTERVAL_MS);
+
+  // Check alerts every 5 minutes (uses no extra API calls — reads cached prices)
+  setInterval(checkAlerts, 5 * 60 * 1000);
 });
 
 // ── Auto-add a stock by investing a fixed dollar amount ──────
@@ -146,9 +150,110 @@ async function addStock() {
 }
 
 // ============================================================
+//  CALL BUDGET — tracks API usage per day
+//  25 calls/day total: 15 reserved for auto, 10 for manual
+// ============================================================
+const DAILY_AUTO_LIMIT   = 15;
+const DAILY_MANUAL_LIMIT = 10;
+
+function getTodayKey() {
+  // Returns a string like "2024-04-05" for today — used as storage key
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getCallCounts() {
+  const today = getTodayKey();
+  const stored = loadFromStorage("callCounts");
+  // If the stored data is from a previous day, reset it
+  if (!stored || stored.date !== today) {
+    return { date: today, auto: 0, manual: 0 };
+  }
+  return stored;
+}
+
+function saveCallCounts(counts) {
+  saveToStorage("callCounts", counts);
+}
+
+function renderCallBudget() {
+  const counts = getCallCounts();
+  const autoLeft   = DAILY_AUTO_LIMIT   - counts.auto;
+  const manualLeft = DAILY_MANUAL_LIMIT - counts.manual;
+
+  const btn = document.getElementById("manual-refresh-btn");
+  if (btn) {
+    btn.innerHTML = `<i class="bi bi-arrow-clockwise me-1"></i>Refresh Prices <span class="badge bg-secondary ms-1">${manualLeft} left today</span>`;
+    btn.disabled  = manualLeft <= 0;
+    btn.title     = manualLeft <= 0 ? "You've used all 10 manual refreshes for today. Resets at midnight." : "";
+  }
+
+  const autoEl = document.getElementById("auto-refresh-status");
+  if (autoEl) {
+    const marketStatus = isDuringTradingHours() ? "🟢 Market Open" : "🔴 Market Closed";
+    autoEl.textContent = `${marketStatus} · Auto: ${counts.auto}/${DAILY_AUTO_LIMIT} today`;
+  }
+}
+
+// ============================================================
 //  REFRESH all holdings with latest prices
 // ============================================================
+
+// Returns true if current time is within TSX trading hours (9:30–16:00 EST)
+function isDuringTradingHours() {
+  // Convert current time to Eastern Time
+  const now = new Date();
+  const estString = now.toLocaleString("en-US", { timeZone: "America/New_York" });
+  const est = new Date(estString);
+
+  const hours   = est.getHours();
+  const minutes = est.getMinutes();
+  const day     = est.getDay();   // 0 = Sunday, 6 = Saturday
+
+  // Markets are closed on weekends
+  if (day === 0 || day === 6) return false;
+
+  // 9:30 AM to 4:00 PM EST
+  const afterOpen  = hours > 9  || (hours === 9  && minutes >= 30);
+  const beforeClose = hours < 16;
+
+  return afterOpen && beforeClose;
+}
+
+// Called automatically on a 96-minute interval
+async function autoRefresh() {
+  // Only refresh during TSX trading hours (9:30 AM – 4:00 PM EST, Mon–Fri)
+  if (!isDuringTradingHours()) {
+    console.log("Market is closed — skipping auto-refresh.");
+    renderCallBudget();
+    return;
+  }
+
+  const counts = getCallCounts();
+  if (counts.auto >= DAILY_AUTO_LIMIT) {
+    console.log("Auto-refresh limit reached for today.");
+    return;
+  }
+  counts.auto++;
+  saveCallCounts(counts);
+  renderCallBudget();
+  await doRefresh();
+}
+
+// Called when user clicks the Refresh button
 async function refreshAll() {
+  const counts = getCallCounts();
+  if (counts.manual >= DAILY_MANUAL_LIMIT) {
+    showBudgetWarning();
+    return;
+  }
+  counts.manual++;
+  saveCallCounts(counts);
+  renderCallBudget();
+  await doRefresh();
+}
+
+// The actual refresh logic (shared by both auto and manual)
+async function doRefresh() {
   if (portfolio.length === 0) return;
 
   document.getElementById("last-updated").textContent = "Refreshing…";
@@ -162,8 +267,8 @@ async function refreshAll() {
     } catch (e) {
       console.warn(`Could not refresh ${holding.symbol}:`, e.message);
     }
-    // Small delay to avoid hitting the API rate limit (5 calls/min on free tier)
-    await sleep(12_000);
+    // Alpha Vantage free tier: max 5 calls/minute → wait 12s between calls
+    if (portfolio.length > 1) await sleep(12_000);
   }
 
   saveToStorage("portfolio", portfolio);
@@ -172,6 +277,13 @@ async function refreshAll() {
 
   const now = new Date().toLocaleTimeString();
   document.getElementById("last-updated").textContent = `Last updated: ${now}`;
+}
+
+function showBudgetWarning() {
+  document.getElementById("toast-body").textContent =
+    "You've used all 10 manual refreshes for today. Auto-refresh is still running. Resets at midnight.";
+  const toast = new bootstrap.Toast(document.getElementById("alertToast"), { delay: 6000 });
+  toast.show();
 }
 
 // ============================================================
